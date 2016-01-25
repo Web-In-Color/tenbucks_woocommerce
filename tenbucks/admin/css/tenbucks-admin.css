@@ -1,0 +1,13 @@
+h2.clear {
+    line-height: 70px;
+}
+
+h2.clear > img {
+    margin-right: 13px;
+}
+
+#tenbucks-iframe {
+    display: block;
+    width: 100%;
+    min-height: 400px;
+}
