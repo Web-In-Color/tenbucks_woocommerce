@@ -10,19 +10,25 @@
             height: calculedHeight
         });
 
-        // First connexion notice
-        $('#wic_update_fcn').click(function(e) {
+        // Key generation
+        $('.tenbucks-action-btn').click(function(e) {
             e.preventDefault();
-            var $notice = $(this).parents('div.notice');
+            var generateKeys = this.name === 'tb-generate' ? 1 : 0,
+                $notice = $('#tenbucks-kgn');
+
             $.post(ajaxurl, {
-                action: 'wic_update_option',
-                wic_hide_fcn: 1
+                action: 'tenbucks_create_key',
+                generate: generateKeys
             }, function(res) {
+                console.log(res);
                 if (res.success) {
-                    $notice.slideUp();
+                    window.setTimeout(function() {
+                        $notice.slideUp();
+                    }, 2000);
                 } else {
                     $notice.removeClass('notice-info').addClass('notice-error').html(res.message);
                 }
+                $notice.find('h4').text(res.data.message);
             });
         });
     });

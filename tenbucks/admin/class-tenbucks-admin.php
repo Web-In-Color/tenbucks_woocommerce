@@ -100,6 +100,11 @@ class Tenbucks_Admin {
 
 	}
 
+	public function ajax_handler()
+	{
+		add_action('wp_ajax_tenbucks_create_key', array($this, 'create_key'));
+	}
+
 	/**
 	 * Add Tenbucks admin menu
 	 *
@@ -121,20 +126,21 @@ class Tenbucks_Admin {
 	{
 		// First check if WooCommerce is active...
 		if (!is_plugin_active( 'woocommerce/woocommerce.php' )) {
-			return print('<h2 class="clear">'.__('Please install WooCommerce before using this plugin.', 'wic-bridge').'</h2>');
+			return print('<h2 class="clear">'.__('Please install WooCommerce before using this plugin.', 'tenbucks').'</h2>');
 		}
 
 		$wc_data = get_plugin_data(WP_PLUGIN_DIR.'/woocommerce/woocommerce.php');
 
 		if (version_compare ( $wc_data['Version'] , '2.4.0', '<')) {
-			return print('<h2 class="clear">'.__('Please update your WooCommerce plugin before using this plugin.', 'wic-bridge').'</h2>');
+			return print('<h2 class="clear">'.__('Please update your WooCommerce plugin before using this plugin.', 'tenbucks').'</h2>');
 		}
 
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-wic-server.php';
 		$is_ssl = is_ssl();
 		$shop_url = get_site_url();
 		$display_iframe = false;
-		$api_doc_link = sprintf('<a href="%s" target="_blank">%s</a>', 'http://docs.woothemes.com/document/woocommerce-rest-api/', __('See how', 'wic-bridge'));
+		$display_generation_btn = !get_option('tenbucks_is_keys_created');
+		$api_doc_link = sprintf('<a href="%s" target="_blank">%s</a>', 'http://docs.woothemes.com/document/woocommerce-rest-api/', __('See how', 'tenbucks'));
 		$is_api_active = get_option('woocommerce_api_enabled') === 'yes';
 		$lang_infos = explode('-', get_bloginfo('language'));
 		$query = array(
@@ -149,15 +155,17 @@ class Tenbucks_Admin {
 
 		if (!$is_ssl)
 		{
-			$ssl_message = __('You\'re not using SSL. For safety reasons, our iframe use <strong>https protocol</strong> to secure every transactions', 'wic-bridge');
+			$ssl_message = __('You\'re not using SSL. For safety reasons, our iframe use <strong>https protocol</strong> to secure every transactions', 'tenbucks');
 			$pp_url = 'http://store.webincolor.fr/conditions-generales-de-ventes';
-			$pp_link = sprintf('<a href="%s" target="_blank">%s</a>', $pp_url, __('More informations about our privacy policy', 'wic-bridge'));
+			$pp_link = sprintf('<a href="%s" target="_blank">%s</a>', $pp_url, __('More informations about our privacy policy', 'tenbucks'));
 			$this->add_notice($ssl_message.'. '.$pp_link.'.', 'info');
 		}
 
 		// If API is disabled.
 		if (!$is_api_active) {
-			$this->add_notice(__('WooCommerce API is not enabled. Please activate it and create an API read/write access before using this plugin.', 'wic-bridge').' '.$api_doc_link, 'error');
+			if (!$display_generation_btn) {
+				$this->add_notice(__('WooCommerce API is not enabled. Please activate it and create an API read/write access before using this plugin.', 'tenbucks').' '.$api_doc_link, 'error');
+			}
 		} else {
 			$api_details = array();
 			preg_match('/\/wc-api\/v(\d)\/$/',  get_woocommerce_api_url('/'), $api_details);
@@ -170,19 +178,15 @@ class Tenbucks_Admin {
 				$standalone_url = WIC_Server::getUrl('/', $query, true);
 				$iframe_url = WIC_Server::getUrl('/', $query);
 
-				if (get_option('wic_show_fcn')) {
-					$message = __('On your first connexion, you\'ll have to set your credential for API access. Please create a <strong>Read/Write</strong> access in order to use our apps. <a href="#" id="wic_update_fcn">Do not show this again</a>', 'wic-bridge');
-					$this->add_notice($message, 'info');
-				}
 			} else {
-				$this->add_notice(__('Your WooCommerce version is obsolete, please update it before using this plugin.', 'wic-bridge'), 'error');
+				$this->add_notice(__('Your WooCommerce version is obsolete, please update it before using this plugin.', 'tenbucks'), 'error');
 			}
 		}
 
 		// Debug Mod prevent JSON responses to be correctly parsed
 		if (WP_DEBUG)
 		{
-			$message = __('WP_DEBUG is active. This can prevent our WooCommerce responses to be parsed correctly and cause malfunctioning.', 'wic-bridge');
+			$message = __('WP_DEBUG is active. This can prevent our WooCommerce responses to be parsed correctly and cause malfunctioning.', 'tenbucks');
 			$this->add_notice($message, 'error');
 		}
 
@@ -239,14 +243,75 @@ class Tenbucks_Admin {
 		return plugin_dir_url(__FILE__).$dirname.'/'.$filename;
 	}
 
-	public function post_process()
+	public function create_key()
 	{
-		if (isset($_POST['wic_hide_fcn'])) {
-			update_option('wic_show_fcn', false);
-			wp_die(json_encode(array(
-				'success' => true,
-				'message' => __('Settings updated', 'wic-bridge')
-			)));
+		include_once plugin_dir_path( dirname( __FILE__ ) ).'/vendor/tenbucks_keys_client/lib/TenbucksKeysClient.php';
+		global $wpdb;
+		if ((int)$_POST['generate']) {
+			try {
+				// If API disabled, active it
+				if (get_option('woocommerce_api_enabled') !== 'yes') {
+					update_option('woocommerce_api_enabled', 'yes');
+				}
+
+				$consumer_key    = 'ck_' . wc_rand_hash();
+				$consumer_secret = 'cs_' . wc_rand_hash();
+				$data = array(
+					'user_id'         => get_current_user_id(),
+					'description'     => 'tenbucks',
+					'permissions'     => 'read_write',
+					'consumer_key'    => wc_api_hash( $consumer_key ),
+					'consumer_secret' => $consumer_secret,
+					'truncated_key'   => substr( $consumer_key, -7 )
+				);
+
+				$wpdb->insert(
+				$wpdb->prefix . 'woocommerce_api_keys',
+				$data,
+				array(
+					'%d',
+					'%s',
+					'%s',
+					'%s',
+					'%s',
+					'%s'
+				)
+			);
+			unset($data);
+
+			$key_id                  = $wpdb->insert_id;
+			$client = new TenbucksKeysClient();
+			$url = get_site_url();
+			$data = array(
+				'url'         => $url,
+				'platform'    => 'WooCommerce',
+				'credentials' => array(
+					'api_key'    => $consumer_key, // key
+					'api_secret' => $consumer_secret, // secret
+				)
+			);
+
+			if ($client->setKey($url)->send($data)) {
+				// success
+				//update_option('tenbucks_is_keys_created', true);
+				wp_send_json_success( array(
+					'message' => __( 'API Key generated successfully. you can now register on tenbucks.', 'tenbucks' )
+					) );
+				} else {
+					wp_send_json_error(array(
+					'message' => __( 'Creation failed, please try again.', 'tenbucks' )
+					));
+				}
+
+			} catch ( Exception $e ) {
+				wp_send_json_error( array( 'message' => $e->getMessage() ) );
+			}
+		} else {
+			// Button do not show
+			//update_option('tenbucks_is_keys_created', true);
+			wp_send_json_success( array(
+				'message' => __( 'Settings updated.', 'tenbucks' )
+				) );
 		}
 	}
 }

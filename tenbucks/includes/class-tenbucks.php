@@ -144,6 +144,7 @@ class Tenbucks {
 		$plugin_admin = new Tenbucks_Admin( $this->get_plugin_name(), $this->get_version() );
 
 		$this->loader->add_action( 'admin_menu', $plugin_admin, 'admin_menu');
+		$plugin_admin->ajax_handler();
 
 	}
 
