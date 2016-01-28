@@ -1,0 +1,3 @@
+[submodule "tenbucks/vendor/tenbucks_keys_client"]
+	path = tenbucks/vendor/tenbucks_keys_client
+	url = https://github.com/Web-In-Color/tenbucks_keys_client.git
