@@ -1,6 +1,11 @@
 <div class="wrap">
-	<h2 class="clear"><?php _e('Tenbucks', 'tenbucks'); ?></h2>
+	<h2 class="clear">
+		<img width="244" height="44" src="<?php echo $this->get_asset_path('logo_244x44.png'); ?>" alt="<?php _e('Tenbucks', 'tenbucks'); ?>" />
+	</h2>
 	<div id="notices" data-wait="<?php esc_attr_e(__('Please wait...', 'tenbucks')); ?>"></div>
+	<p>
+		<?php _e('Your must register this website before using tenbucks©. Please complete below form.', 'tenbucks'); ?>
+	</p>
     <form id="tenbucks_register_form" name="tenbucks_register_form" method="post">
         <fieldset>
             <legend><?php _e('Registration', 'tenbucks'); ?></legend>
@@ -12,6 +17,9 @@
                         </th>
                         <td>
                             <input name="email" id="email" value="<?php esc_attr_e(get_bloginfo('admin_email')); ?>" class="regular-text code" type="email" required>
+							<p class="description" id="email-description">
+								<?php _e('Your password will be send to this email, so it must be valid. If your already have an account, this shop will be added to your existing sites.', 'tenbucks'); ?>
+							</p>
                         </td>
                     </tr>
                     <tr>

@@ -1,3 +1,4 @@
+refresh = -> location.reload()
 jQuery(document).ready ($) ->
 
     # iframe formating
@@ -19,6 +20,7 @@ jQuery(document).ready ($) ->
         $.post ajaxurl, data, (res) ->
             if res.success
                 notice.setType 'success'
+                window.setTimeout(refresh, 2000) if res.data.needReload
             else
                 notice.setType 'error'
                 $('#submit').attr 'disabled', false

@@ -139,7 +139,7 @@ class Tenbucks_Admin {
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-wic-server.php';
 		$is_ssl = is_ssl();
 		$shop_url = get_site_url();
-		$display_iframe = (bool)get_option('tenbucks_registration_complete');
+		$display_iframe = false; //(bool)get_option('tenbucks_registration_complete');
 		$api_doc_link = sprintf('<a href="%s" target="_blank">%s</a>', 'http://docs.woothemes.com/document/woocommerce-rest-api/', __('See how', 'tenbucks'));
 		$is_api_active = get_option('woocommerce_api_enabled') === 'yes';
 		$lang_infos = explode('-', get_bloginfo('language'));
@@ -215,7 +215,6 @@ class Tenbucks_Admin {
 	public function get_asset_path($filename)
 	{
 		$extension = substr($filename, -3);
-		$asset_dir = plugin_dir_path( dirname( __FILE__ ) ).'/admin';
 
 		switch ($extension)
 		{
@@ -313,7 +312,7 @@ class Tenbucks_Admin {
 				$updated_rows = $wpdb->update(
 					$table,
 					$data,
-					array( 'key_id' => 1 ),
+					array( 'key_id' => $key_id ),
 					array(
 						'%d',
 						'%s',
@@ -326,7 +325,7 @@ class Tenbucks_Admin {
 				if (!$updated_rows) {
 					update_option('tenbucks_ak_id', 0);
 					return wp_send_json_error(array(
-						'message' => __( 'Creation failed, please try again.', 'tenbucks' )
+						'message' => __( 'Keys update failed, please try again.', 'tenbucks' )
 					));
 				}
 			}
@@ -349,12 +348,21 @@ class Tenbucks_Admin {
 					'api_secret' => $consumer_secret, // secret
 				)
 			);
-
-			if ($client->send($opts)) {
+			$query = $client->send($opts);
+			$success = array_key_exists('success', $query) && (bool)$query['success'];
+			if ($success) {
 				// success
-				//update_option('tenbucks_is_keys_created', true);
+				update_option('tenbucks_registration_complete', true);
+				if ($query['new_account']) {
+					$msg = __( 'New account created. Please check your emails to confirm your address and start using tenbucks.', 'tenbucks' );
+					$need_reload = false;
+				} else {
+					$msg = __( 'Shop added to your existing account. Page will reload shortly.', 'tenbucks' );
+					$need_reload = true;
+				}
 				return wp_send_json_success( array(
-					'message' => __( 'Registration is successfull, please check your emails.', 'tenbucks' )
+					'message' => $msg,
+					'needReload' => $need_reload
 				) );
 			} else {
 				return wp_send_json_error(array(
