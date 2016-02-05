@@ -135,11 +135,11 @@ class Tenbucks_Admin {
 			return print('<h2 class="clear">'.__('Please update your WooCommerce plugin before using this plugin.', 'tenbucks').'</h2>');
 		}
 
+
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-wic-server.php';
 		$is_ssl = is_ssl();
 		$shop_url = get_site_url();
-		$display_iframe = false;
-		$display_generation_btn = !get_option('tenbucks_is_keys_created');
+		$display_iframe = (bool)get_option('tenbucks_registration_complete');
 		$api_doc_link = sprintf('<a href="%s" target="_blank">%s</a>', 'http://docs.woothemes.com/document/woocommerce-rest-api/', __('See how', 'tenbucks'));
 		$is_api_active = get_option('woocommerce_api_enabled') === 'yes';
 		$lang_infos = explode('-', get_bloginfo('language'));
@@ -163,9 +163,7 @@ class Tenbucks_Admin {
 
 		// If API is disabled.
 		if (!$is_api_active) {
-			if (!$display_generation_btn) {
 				$this->add_notice(__('WooCommerce API is not enabled. Please activate it and create an API read/write access before using this plugin.', 'tenbucks').' '.$api_doc_link, 'error');
-			}
 		} else {
 			$api_details = array();
 			preg_match('/\/wc-api\/v(\d)\/$/',  get_woocommerce_api_url('/'), $api_details);
@@ -174,11 +172,11 @@ class Tenbucks_Admin {
 
 			if ($api_version > 1) {
 				$query['api_version'] = $api_version;
-				$display_iframe = true;
 				$standalone_url = WIC_Server::getUrl('/', $query, true);
 				$iframe_url = WIC_Server::getUrl('/', $query);
 
 			} else {
+				$display_iframe = false;
 				$this->add_notice(__('Your WooCommerce version is obsolete, please update it before using this plugin.', 'tenbucks'), 'error');
 			}
 		}
@@ -189,8 +187,8 @@ class Tenbucks_Admin {
 			$message = __('WP_DEBUG is active. This can prevent our WooCommerce responses to be parsed correctly and cause malfunctioning.', 'tenbucks');
 			$this->add_notice($message, 'error');
 		}
-
-		require_once plugin_dir_path( dirname( __FILE__ ) ). 'admin/partials/tenbucks-admin-display.php';
+		$template_name = $display_iframe ? 'tenbucks-admin-display' : 'tenbucks-registration-form';
+		require_once plugin_dir_path( dirname( __FILE__ ) ). 'admin/partials/'.$template_name.'.php';
 	}
 
 	/**
@@ -245,73 +243,127 @@ class Tenbucks_Admin {
 
 	public function create_key()
 	{
-		include_once plugin_dir_path( dirname( __FILE__ ) ).'/vendor/tenbucks_keys_client/lib/TenbucksKeysClient.php';
-		global $wpdb;
-		if ((int)$_POST['generate']) {
-			try {
-				// If API disabled, active it
-				if (get_option('woocommerce_api_enabled') !== 'yes') {
-					update_option('woocommerce_api_enabled', 'yes');
-				}
+		include_once plugin_dir_path( dirname( __FILE__ ) ).'/vendor/tenbucks_registration_client/lib/TenbucksRegistrationClient.php';
+		$form_is_valid = true;
+		$required_fields = array('email', 'email_confirmation');
+		foreach ($required_fields as $key) {
+			if (!array_key_exists($key, $_POST) || empty($_POST[$key])) {
+				$format = __( 'Field %s is missing.', 'tenbucks' );
+				return wp_send_json_error( array(
+					'message' => sprintf($format, $key),
+					'field' => $key
+					) );
+			}
+		}
+		$post_data = array_map('strtolower', $_POST);
+		$email = $post_data['email'];
+		$email_confirmation = $post_data['email_confirmation'];
+		$sponsor = empty($post_data['sponsor']) ? null : $post_data['sponsor'];
 
-				$consumer_key    = 'ck_' . wc_rand_hash();
-				$consumer_secret = 'cs_' . wc_rand_hash();
-				$data = array(
-					'user_id'         => get_current_user_id(),
-					'description'     => 'tenbucks',
-					'permissions'     => 'read_write',
-					'consumer_key'    => wc_api_hash( $consumer_key ),
-					'consumer_secret' => $consumer_secret,
-					'truncated_key'   => substr( $consumer_key, -7 )
-				);
+		$error_msg = false;
 
-				$wpdb->insert(
-				$wpdb->prefix . 'woocommerce_api_keys',
-				$data,
-				array(
+		if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+			$error_msg = __( 'Invalid email.', 'tenbucks' );
+		}
+
+		if ($email !== $email_confirmation) {
+			$error_msg = __( 'Email and confirmation are different.', 'tenbucks' );
+		}
+
+		if ($error_msg) {
+			return wp_send_json_error( array(
+				'message' => $error_msg,
+				'field' => 'email'
+				) );
+		}
+
+		try {
+			global $wpdb;
+			// If API disabled, active it
+			if (get_option('woocommerce_api_enabled') !== 'yes') {
+				update_option('woocommerce_api_enabled', 'yes');
+			}
+
+			$key_id = (int)get_option('tenbucks_ak_id');
+			$consumer_key    = 'ck_' . wc_rand_hash();
+			$consumer_secret = 'cs_' . wc_rand_hash();
+			$table = $wpdb->prefix . 'woocommerce_api_keys';
+			$data = array(
+				'user_id'         => get_current_user_id(),
+				'consumer_key'    => wc_api_hash( $consumer_key ),
+				'consumer_secret' => $consumer_secret,
+				'truncated_key'   => substr( $consumer_key, -7 )
+			);
+
+			if (!$key_id) {
+				$data['description'] = 'tenbucks';
+				$data['permissions'] = 'read_write';
+
+				$wpdb->insert($table, $data, array(
 					'%d',
 					'%s',
 					'%s',
 					'%s',
 					'%s',
 					'%s'
-				)
-			);
+				) );
+				update_option('tenbucks_ak_id', $wpdb->insert_id);
+
+			} else {
+				$updated_rows = $wpdb->update(
+					$table,
+					$data,
+					array( 'key_id' => 1 ),
+					array(
+						'%d',
+						'%s',
+						'%s',
+						'%s'
+					),
+					array( '%d' )
+				);
+
+				if (!$updated_rows) {
+					update_option('tenbucks_ak_id', 0);
+					return wp_send_json_error(array(
+						'message' => __( 'Creation failed, please try again.', 'tenbucks' )
+					));
+				}
+			}
+
 			unset($data);
 
-			$key_id                  = $wpdb->insert_id;
-			$client = new TenbucksKeysClient();
+			$client = new TenbucksRegistrationClient();
 			$url = get_site_url();
-			$data = array(
-				'url'         => $url,
-				'platform'    => 'WooCommerce',
+			$lang_infos = explode('_',  get_locale());
+			$opts = array(
+	            'email' => $email,
+	            'sponsor' => $sponsor, // optionnal
+				'company' => get_bloginfo('name'),
+	            'platform' => 'WooCommerce',
+				'locale' => $lang_infos[0],
+				'country' => $lang_infos[1],
+				'url'         => get_site_url(),
 				'credentials' => array(
 					'api_key'    => $consumer_key, // key
 					'api_secret' => $consumer_secret, // secret
 				)
 			);
 
-			if ($client->setKey($url)->send($data)) {
+			if ($client->send($opts)) {
 				// success
 				//update_option('tenbucks_is_keys_created', true);
-				wp_send_json_success( array(
-					'message' => __( 'API Key generated successfully. you can now register on tenbucks.', 'tenbucks' )
-					) );
-				} else {
-					wp_send_json_error(array(
-					'message' => __( 'Creation failed, please try again.', 'tenbucks' )
-					));
-				}
-
-			} catch ( Exception $e ) {
-				wp_send_json_error( array( 'message' => $e->getMessage() ) );
-			}
-		} else {
-			// Button do not show
-			//update_option('tenbucks_is_keys_created', true);
-			wp_send_json_success( array(
-				'message' => __( 'Settings updated.', 'tenbucks' )
+				return wp_send_json_success( array(
+					'message' => __( 'Registration is successfull, please check your emails.', 'tenbucks' )
 				) );
+			} else {
+				return wp_send_json_error(array(
+					'message' => __( 'Creation failed, please try again.', 'tenbucks' )
+				));
+			}
+
+		} catch ( Exception $e ) {
+			return wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}
 	}
 }
