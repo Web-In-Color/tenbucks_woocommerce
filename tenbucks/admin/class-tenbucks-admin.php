@@ -139,7 +139,7 @@ class Tenbucks_Admin {
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-wic-server.php';
 		$is_ssl = is_ssl();
 		$shop_url = get_site_url();
-		$display_iframe = false; //(bool)get_option('tenbucks_registration_complete');
+		$display_iframe = (bool)get_option('tenbucks_registration_complete');
 		$api_doc_link = sprintf('<a href="%s" target="_blank">%s</a>', 'http://docs.woothemes.com/document/woocommerce-rest-api/', __('See how', 'tenbucks'));
 		$is_api_active = get_option('woocommerce_api_enabled') === 'yes';
 		$lang_infos = explode('-', get_bloginfo('language'));
