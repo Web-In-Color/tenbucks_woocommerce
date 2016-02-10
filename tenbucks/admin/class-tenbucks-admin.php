@@ -147,10 +147,6 @@ class Tenbucks_Admin {
 			'url' => $shop_url,
 			'timestamp' => (int)microtime(true),
 			'platform' => 'WooCommerce',
-			'email' => get_bloginfo('admin_email'),
-			'username' => get_bloginfo('name'),
-			'locale' => $lang_infos[0],
-			'country' => $lang_infos[1],
 		);
 
 		if (!$is_ssl)
