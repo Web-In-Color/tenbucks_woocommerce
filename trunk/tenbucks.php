@@ -16,7 +16,7 @@
  * Plugin Name:       Tenbucks
  * Plugin URI:        https://www.tenbucks.io
  * Description:       This plugin allow you to use Tenbucks extensions for WooCommerce.
- * Version:           1.0.0
+ * Version:           1.0.5
  * Author:            Web In Color
  * Author URI:        http://www.webincolor.fr/
  * License:           GPL-2.0+
