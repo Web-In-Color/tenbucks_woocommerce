@@ -21,11 +21,19 @@
  *
  * @link       https://www.tenbucks.io
  * @since      1.0.0
- *
- * @package    Tenbucks
  */
 
 // If uninstall not called from WordPress, then exit.
-if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
-	exit;
+if (!defined('WP_UNINSTALL_PLUGIN')) {
+    exit;
+}
+
+// Send uninstall notification
+include dirname(__FILE__).'/vendor/tenbucks_registration_client/src/TenbucksRegistrationClient.php';
+$client = new TenbucksRegistrationClient();
+
+try {
+    $client->uninstall(get_site_url());
+} catch (Exception $exc) {
+    echo $exc->getTraceAsString();
 }

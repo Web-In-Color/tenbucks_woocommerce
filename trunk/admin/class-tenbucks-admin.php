@@ -147,6 +147,8 @@ class Tenbucks_Admin {
 			'url' => $shop_url,
 			'timestamp' => (int)microtime(true),
 			'platform' => 'WooCommerce',
+			'cms_version' => $wc_data['Version'],
+			'module_version' => $this->version
 		);
 
 		if (!$is_ssl)
